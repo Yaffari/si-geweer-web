@@ -373,3 +373,12 @@ input[type="date"] { min-height: 52px; -webkit-appearance: none; appearance: non
   opacity: 0; transform: translateY(12px); transition: opacity 0.2s, transform 0.2s; pointer-events: none;
 }
 #toast.on { opacity: 1; transform: none; }
+
+/* ---------------------------------------------------------------- names from a photo */
+.srow { display: flex; align-items: center; gap: 2px; padding: 4px 0; border-bottom: 1px solid var(--outline-v); }
+.check { width: 30px; height: 30px; margin: 0 6px; border-radius: 8px; border: 2px solid var(--outline); display: grid; place-items: center; flex: none; }
+.check.on { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+.snamewrap { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sname { width: 100%; border: 1.5px solid var(--outline-v); border-radius: 10px; padding: 10px; background: var(--surface); outline: none; }
+.sname:focus { border-color: var(--primary); }
+.srow.off .sname { opacity: 0.5; text-decoration: line-through; }

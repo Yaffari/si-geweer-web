@@ -135,6 +135,20 @@ test('a standard week fills the rooster', () => {
   assert.deepEqual(L.rosterCell(led, 'L', 5), { available: false, source: 'STANDARD' });
 });
 
+test('names from a photographed list', () => {
+  const text = ['040581', 'Actief 313', 'Bakker,Jan M', 'Berg,Pieter van den M', 'Dijk,Sanne van V', 'Hof,Lars van ’t M', 'Jong,Emma de V',
+    'Wulp,Tim van der M', 'Visser,Anna V', 'Visser,Bram M', 'BOS,KEES M', 'Kramer.Joost M', 'Geomini Justin M', 'Haan Piet de M'].join('\n');
+  const p = L.parseNameList(text);
+  assert.deepEqual(p.names.map((n) => n.name),
+    ['Bakker', 'van den Berg', 'van Dijk', "van 't Hof", 'de Jong', 'van der Wulp', 'Visser A.', 'Visser B.', 'Bos', 'Kramer', 'Geomini', 'de Haan']);
+  assert.equal(p.names.map((n) => (n.gender === 'FEMALE' ? 'V' : 'M')).join(''), 'MMVMVMVMMMMM');
+  assert.deepEqual(p.skipped, ['040581', 'Actief 313']);
+  // a reader that returns the M/V column on its own (iPhone Live Text can)
+  assert.deepEqual(L.parseNameList('Bakker,Jan\nDijk,Sanne van\nM\nV').names.map((n) => n.gender), ['MALE', 'FEMALE']);
+  // a plain pasted list stays as it is: one trailing letter may be an initial
+  assert.deepEqual(L.parseNameList('de Vries\nJansen M\nBakker').names.map((n) => n.name), ['de Vries', 'Jansen M', 'Bakker']);
+});
+
 // ------------------------------------------------------------------ iPhone <-> Android
 
 /** What an iPhone cursusleider's file looks like; the Android unit test reads this (CrossPlatformTest.kt). */

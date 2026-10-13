@@ -3,7 +3,7 @@
 import * as L from './logic.js';
 import { Store } from './store.js';
 
-const VERSION = '2026.10.07-1';
+const VERSION = '2026.10.13-1013';
 const S = new Store();
 const $app = document.getElementById('app');
 const $dlg = document.getElementById('dialog');
@@ -45,6 +45,7 @@ const PATHS = {
   settings: 'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z',
   check: 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
   download: 'M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z',
+  camera: 'M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z',
 };
 const icon = (n, size = 24) => `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true"><path d="${PATHS[n]}"/></svg>`;
 
@@ -120,6 +121,7 @@ const INIT = {
   newCourse(s) { s.start = L.nextWorkday(today()); s.weekText = String(L.isoWeek(s.start)); },
   editCourse(s) { const c = S.courses.get(s.id); s.start = c.startDate; s.weekText = String(c.week); },
   students(s) { s.gender = 'MALE'; s.input = ''; },
+  scan(s) { s.text = ''; s.rows = []; s.skipped = []; },
   settings(s) { s.nameText = S.me.name; },
 };
 
@@ -258,9 +260,24 @@ const SCREENS = {
         <button class="fab" data-act="add-students" aria-label="Toevoegen">${icon('plus')}</button>
       </div>
       <p class="hint">Man of vrouw kies je met het knopje links (standaard man); in de lijst tik je op het teken om te wisselen. Tip: plak een hele lijst, één naam per regel.</p>
+      <button class="btn outline wide" data-act="go" data-to="scan" data-id="${c.id}">${icon('camera')} Namen van een foto</button>
       <div id="student-list">${studentList(c)}</div>
     </main>
     <div class="bottombar"><button class="btn primary wide" data-act="list-done">${icon('check')} Lijst klaar</button></div>`;
+  },
+
+  /** A name list from a photo: iOS reads the text itself (Live Text), the app turns it into cursisten. */
+  scan(s) {
+    const c = S.courses.get(s.id);
+    if (!c) return SCREENS.home();
+    return topBar({ title: 'Namen van een foto', sub: L.courseTitle(c), back: true }) + `<main class="page">
+      ${info("1. Tik in het vak hieronder en kies 'Scan tekst' (zie je die knop niet, houd dan je vinger in het vak). Richt de camera op de namenlijst en tik op 'Voeg in'.\n" +
+        "2. Staat de lijst al op een foto? Open hem in Foto's, houd je vinger op een naam, kies 'Selecteer alles' en 'Kopieer', en plak hier.\n" +
+        'De iPhone leest de tekst zelf, zonder internet. Daarna controleer je de namen.', 'Zo zet je een namenlijst erin')}
+      <label class="field"><span>Gelezen tekst</span><textarea id="scan-text" data-input="scanText" rows="5" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="Tik hier en kies Scan tekst">${esc(s.text)}</textarea></label>
+      <div id="scan-preview">${scanPreview(s)}</div>
+    </main>
+    <div class="bottombar"><button id="scan-add" class="btn primary wide" data-act="scan-add">${scanAddLabel(s)}</button></div>`;
   },
 
   pick(s) {
@@ -547,6 +564,33 @@ function studentList(c) {
     <button class="iconbtn" data-act="delete-student" data-id="${s.id}" aria-label="Verwijderen">${icon('trash')}</button></div>`).join('')}</div>`;
 }
 
+function scanPreview(s) {
+  if (!s.rows.length) return s.text.trim() ? '<p class="muted">Nog geen namen herkend in deze tekst.</p>' : '';
+  const rows = s.rows.map((r, i) => `<div class="srow${r.include ? '' : ' off'}">
+    <button class="check${r.include ? ' on' : ''}" data-act="scan-include" data-i="${i}" aria-label="${r.include ? 'Wordt toegevoegd' : 'Wordt overgeslagen'}">${r.include ? icon('check', 20) : ''}</button>
+    <button class="iconbtn" data-act="scan-gender" data-i="${i}" aria-label="${GENDER_LABEL[r.gender]}, tik om te wisselen">${genderIcon(r.gender, 22)}</button>
+    <span class="snamewrap"><input class="sname" data-input="scanName" data-i="${i}" value="${esc(r.name)}" autocapitalize="words" autocomplete="off">${r.exists ? '<span class="small muted">staat al op de lijst</span>' : ''}</span></div>`).join('');
+  return `<div class="label">${L.nl.count(s.rows.length, 'naam', 'namen')} gevonden. Controleer ze: tik op het teken voor man of vrouw, verbeter een naam of vink hem uit.</div>
+    <div class="list">${rows}</div>${s.skipped.length ? `<p class="hint">Overgeslagen: ${esc(s.skipped.join(' · '))}</p>` : ''}`;
+}
+
+const scanAddLabel = (s) => `${icon('check')} Voeg ${L.nl.count(s.rows.filter((r) => r.include && r.name.trim()).length, 'cursist', 'cursisten')} toe`;
+
+function refreshScan(s) {
+  document.getElementById('scan-preview').innerHTML = scanPreview(s);
+  document.getElementById('scan-add').innerHTML = scanAddLabel(s);
+}
+
+function parseScan(s) {
+  const have = new Set(L.activeStudents(S.courses.get(s.id)).map((x) => x.name.toLocaleLowerCase('nl')));
+  const p = L.parseNameList(s.text);
+  s.rows = p.names.map((n) => {
+    const exists = have.has(n.name.toLocaleLowerCase('nl'));
+    return { name: n.name, gender: n.gender ?? 'MALE', include: !exists, exists };
+  });
+  s.skipped = p.skipped;
+}
+
 function ratingCard(r, mine, leader) {
   const phases = L.PHASES.map((p) => {
     const ps = r[p.key];
@@ -814,6 +858,16 @@ const ACT = {
     refreshAddGender(s);
   },
   'add-students': () => addStudents(),
+  'scan-include': (d) => { const s = screen(); const r = s.rows[Number(d.i)]; r.include = !r.include; refreshScan(s); },
+  'scan-gender': (d) => { const s = screen(); const r = s.rows[Number(d.i)]; r.gender = r.gender === 'MALE' ? 'FEMALE' : 'MALE'; refreshScan(s); },
+  'scan-add': () => {
+    const s = screen();
+    const chosen = s.rows.filter((r) => r.include && r.name.trim());
+    if (!chosen.length) return toast('Geen namen om toe te voegen');
+    const added = S.addStudentList(s.id, chosen.map((r) => ({ name: r.name.trim().replace(/\s+/g, ' '), gender: r.gender })));
+    back();
+    toast(`${L.nl.count(added, 'cursist', 'cursisten')} toegevoegd`);
+  },
   'flip-gender': (d) => {
     const s = screen();
     const st = L.student(S.courses.get(s.id), d.id);
@@ -910,9 +964,22 @@ const ACT = {
   'dlg-home': () => { closeDialog(); home(); },
 };
 
+let scanTimer = 0;
+
 const INPUT = {
   nameText: (v) => { screen().nameText = v; },
   input: (v) => { screen().input = v; },
+  scanText: (v) => {
+    const s = screen();
+    s.text = v;
+    clearTimeout(scanTimer);
+    scanTimer = setTimeout(() => { parseScan(s); refreshScan(s); }, 250);
+  },
+  scanName: (v, el) => {
+    const s = screen();
+    s.rows[Number(el.dataset.i)].name = v;
+    document.getElementById('scan-add').innerHTML = scanAddLabel(s);
+  },
   note: (v) => {
     const dr = ui.draft;
     const key = L.PHASES[dr.page].key;

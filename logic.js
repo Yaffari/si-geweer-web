@@ -332,3 +332,70 @@ export function withMember(c, id, name, at, standard = null) {
   };
   return { ...c, members: [...c.members.filter((x) => x.id !== id), m] };
 }
+
+// ------------------------------------------------------------------ a name list from a photo or a paste
+
+const PARTICLES = new Set(['van', 'de', 'der', 'den', 'het', "'t", 'te', 'ten', 'ter', 'in', 'op', 'uit', 'aan', "d'", 'vd', 'v.d.', 'v/d', 'la', 'le', 'du', 'von']);
+const HEADER_WORDS = new Set(['naam', 'namen', 'achternaam', 'voornaam', 'geslacht', 'actief', 'cursisten', 'cursist', 'lijst', 'm/v']);
+const TRAILING_GENDER = /^(.*\S)\s+([MmVvFf])\.?$/;
+const PERIOD_FOR_COMMA = /^(\p{Lu}[\p{L}'-]+)\.\s*(\p{Lu}.*)$/u;
+
+const cleanLine = (s) => s.replace(/[’‘`´]/g, "'").replace(/\s+/g, ' ').trim().replace(/^[.;\-•·*]+|[.;\-•·*]+$/g, '').trim();
+const genderOf = (s) => { const t = s.trim().replace(/\.+$/, '').toUpperCase(); return t === 'M' ? 'MALE' : t === 'V' || t === 'F' ? 'FEMALE' : null; };
+/** "BASSA" -> "Bassa": some lists are printed in capitals. */
+const tidy = (s) => s.split(' ').map((w) => (w.length > 1 && /\p{L}/u.test(w) && w === w.toLocaleUpperCase('nl') ? cap(w.toLocaleLowerCase('nl')) : w)).join(' ');
+
+/** "Bemmel,Thijs van" -> { name: 'van Bemmel', first: 'Thijs' }; a line without a comma stays a name as it is. */
+function surnameFirst(s, commaList) {
+  let line = s.includes(',') ? s : s.replace(PERIOD_FOR_COMMA, '$1,$2');
+  if (commaList && !line.includes(',') && line.includes(' ')) line = line.replace(' ', ',');
+  const comma = line.indexOf(',');
+  if (comma <= 0) return { name: tidy(line), first: '' };
+  const tokens = line.slice(comma + 1).trim().split(' ').filter(Boolean);
+  const particle = [];
+  while (tokens.length > 1 && PARTICLES.has(tokens[tokens.length - 1].toLocaleLowerCase('nl'))) particle.unshift(tokens.pop().toLocaleLowerCase('nl'));
+  return { name: [...particle, tidy(line.slice(0, comma).trim())].join(' '), first: tokens.join(' ') };
+}
+
+/**
+ * Turns the text of a photographed or pasted list into cursisten: "Bemmel,Thijs van M" becomes "van Bemmel", man.
+ * Kept identical to NameList in the Android app (Model.kt).
+ */
+export function parseNameList(text) {
+  const skipped = [];
+  const genderColumn = [];
+  const rows = [];
+  for (const l of text.split(/\r?\n/).map(cleanLine).filter(Boolean)) {
+    const g = genderOf(l);
+    if (g) genderColumn.push(g); // a lone M or V: the column was read on its own
+    else if (/\d/.test(l) || /[:|@#]/.test(l) || (l.match(/\p{L}/gu) ?? []).length < 2) skipped.push(l);
+    else if (l.toLocaleLowerCase('nl').split(' ').every((w) => HEADER_WORDS.has(w))) skipped.push(l);
+    else rows.push(l);
+  }
+  // a trailing M/V is the gender column only when most rows have one; otherwise it may be an initial
+  const useTrailing = rows.length > 0 && rows.filter((r) => TRAILING_GENDER.test(r)).length * 2 >= rows.length;
+  // in a "Surname,First" list a row whose comma the reader lost still starts with the surname
+  const commaList = rows.filter((r) => r.includes(',')).length * 2 > rows.length;
+  let parsed = rows.map((row) => {
+    let body = row;
+    let gender = null;
+    const m = useTrailing && row.match(TRAILING_GENDER);
+    if (m) { body = m[1]; gender = genderOf(m[2]); }
+    const { name, first } = surnameFirst(body, commaList);
+    return { name, gender, first };
+  });
+  if (genderColumn.length === parsed.length && parsed.every((p) => p.gender == null)) parsed = parsed.map((p, i) => ({ ...p, gender: genderColumn[i] }));
+  // two people with one surname get their initial
+  const counts = new Map();
+  for (const p of parsed) { const k = p.name.toLocaleLowerCase('nl'); counts.set(k, (counts.get(k) ?? 0) + 1); }
+  const seen = new Set();
+  const names = [];
+  for (const p of parsed) {
+    const name = counts.get(p.name.toLocaleLowerCase('nl')) > 1 && p.first ? `${p.name} ${p.first.charAt(0).toLocaleUpperCase('nl')}.` : p.name;
+    const k = name.toLocaleLowerCase('nl');
+    if (seen.has(k)) continue;
+    seen.add(k);
+    names.push({ name, gender: p.gender, first: p.first });
+  }
+  return { names, skipped };
+}

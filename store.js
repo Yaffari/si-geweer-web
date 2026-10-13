@@ -128,16 +128,21 @@ export class Store {
 
   /** Returns how many were added; names already on the list are skipped. */
   addStudents(id, names, gender = 'MALE') {
+    return this.addStudentList(id, names.map((name) => ({ name, gender })));
+  }
+
+  /** Names with their own man/vrouw, e.g. read from a photo. */
+  addStudentList(id, entries) {
     let added = 0;
     this.update(id, (c) => {
       const have = new Set(c.students.filter((s) => !s.deleted).map((s) => s.name.toLocaleLowerCase('nl')));
       const t = now();
       const fresh = [];
-      for (const n of names) {
-        const k = n.toLocaleLowerCase('nl');
+      for (const { name, gender } of entries) {
+        const k = name.toLocaleLowerCase('nl');
         if (have.has(k)) continue;
         have.add(k);
-        fresh.push({ id: uuid(), name: n, updatedAt: t, deleted: false, gender });
+        fresh.push({ id: uuid(), name, updatedAt: t, deleted: false, gender });
       }
       added = fresh.length;
       return { ...c, students: [...c.students, ...fresh] };
