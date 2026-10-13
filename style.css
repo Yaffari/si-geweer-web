@@ -382,3 +382,15 @@ input[type="date"] { min-height: 52px; -webkit-appearance: none; appearance: non
 .sname { width: 100%; border: 1.5px solid var(--outline-v); border-radius: 10px; padding: 10px; background: var(--surface); outline: none; }
 .sname:focus { border-color: var(--primary); }
 .srow.off .sname { opacity: 0.5; text-decoration: line-through; }
+
+/* ---------------------------------------------------------------- Bluetooth */
+.btpeers { display: flex; flex-direction: column; gap: 8px; }
+.peer { padding-right: 8px; }
+.peer .text { font-weight: 700; color: var(--primary); padding: 10px 8px; }
+.btdot { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; flex: none; font-weight: 800; }
+.btdot.ok, .btdot.final { background: var(--good); color: #fff; }
+.btdot.error { background: var(--error); color: var(--surface); }
+.btdot.busy { background: var(--primary-c); position: relative; }
+.btdot.busy::after { content: ''; position: absolute; inset: 9px; border-radius: 50%; background: var(--primary); animation: btpulse 0.9s ease-in-out infinite alternate; }
+@keyframes btpulse { from { transform: scale(0.55); opacity: 0.6; } to { transform: scale(1); opacity: 1; } }
+.text.alt { align-self: center; text-align: center; margin-top: 8px; }

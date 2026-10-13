@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="nl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SI Geweer as Safari on an iPhone (no Web Bluetooth)</title>
+<link rel="stylesheet" href="../style.css">
+<script>
+Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' });
+Object.defineProperty(navigator, 'bluetooth', { get: () => undefined });
+</script></head>
+<body><div id="app"></div><div id="dialog"></div><div id="toast" role="status"></div>
+<script type="module" src="../app.js"></script></body></html>

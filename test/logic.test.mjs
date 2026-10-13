@@ -193,3 +193,58 @@ test('Android files read and merge exactly like on Android', { skip: !androidFil
   assert.deepEqual(m.members.find((x) => x.id === 'and-1').standard.updatedAt, 300);
   assert.equal(m.leaderPlatform, 'web');
 });
+
+// ------------------------------------------------------------------ Bluetooth (ble.js <-> BleProto in BleSync.kt)
+
+const b64 = (u8) => Buffer.from(u8).toString('base64');
+const unb64 = (s) => new Uint8Array(Buffer.from(s, 'base64'));
+const BLE_MSG = { app: 'si-geweer', version: 1, type: 'state', fromId: 'web-cl', fromName: 'Kap de Vries (iPhone)', sentAt: 6000, course: WEB, standard: WEB.leaderStandard };
+
+test('Bluetooth frames carry a message whole, in packets that fit', async () => {
+  const BL = await import('../ble.js');
+  for (const gzip of [true, false]) {
+    const { enc, body } = await BL.encodeMessage(BLE_MSG, gzip);
+    assert.equal(enc, gzip ? BL.ENC.GZIP : BL.ENC.JSON);
+    for (const size of [182, 512]) {
+      const frames = BL.pushFrames(-123456, enc, body, size);
+      assert.ok(frames.every((f) => f.length <= size));
+      assert.equal(frames[0][0], 2);
+      assert.ok(frames.slice(1).every((f) => f[0] === 3));
+      const data = Buffer.concat([frames[0].subarray(10), ...frames.slice(1).map((f) => f.subarray(1))]);
+      assert.equal(new DataView(frames[0].buffer).getInt32(1), -123456);
+      assert.deepEqual(JSON.parse(await BL.decodeMessage(enc, new Uint8Array(data))), BLE_MSG);
+    }
+    // what OUT hands out: [encoding][length][body], read in pieces
+    const stream = new Uint8Array(5 + body.length);
+    stream[0] = enc;
+    new DataView(stream.buffer).setInt32(1, body.length);
+    stream.set(body, 5);
+    const r = new BL.PullReader();
+    let done = null;
+    for (let i = 0; i < stream.length && !done; i += 184) done = r.add(stream.subarray(i, i + 184));
+    assert.deepEqual(JSON.parse(await BL.decodeMessage(done.enc, done.body)), BLE_MSG);
+  }
+  assert.notEqual(BL.newMessageId(), 0);
+});
+
+test('the iPhone Bluetooth frames for Android are written', async () => {
+  const BL = await import('../ble.js');
+  const { enc, body } = await BL.encodeMessage(BLE_MSG, true);
+  const frames = BL.pushFrames(987654321, enc, body, 182);
+  assert.ok(frames.length > 1);
+  writeFileSync(new URL('ble_push.json', FIX), JSON.stringify({ id: 987654321, frames: frames.map(b64) }));
+});
+
+const androidBle = existsSync(new URL('ble_pull.json', FIX));
+test('Android Bluetooth reads decode on the iPhone', { skip: !androidBle && 'run the Android unit tests first' }, async () => {
+  const BL = await import('../ble.js');
+  const { chunks } = JSON.parse(readFileSync(new URL('ble_pull.json', FIX), 'utf8'));
+  const r = new BL.PullReader();
+  let done = null;
+  for (const c of chunks) done = done ?? r.add(unb64(c));
+  assert.ok(done, 'the stream is complete');
+  const msg = L.parseSyncFile(await BL.decodeMessage(done.enc, done.body));
+  assert.equal(msg.fromName, 'Sgt Bakker');
+  assert.equal(msg.course.id, 'c-xplat');
+  assert.equal(msg.course.ratings.find((x) => x.id === 'r-shared').before.note, 'aangepast');
+});

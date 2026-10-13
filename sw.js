@@ -1,9 +1,9 @@
 // Offline first: once installed, the app always comes from this cache, never from the network.
 // A new version (publish.py stamps VERSION) is fetched in the background when the phone happens to be online.
-const VERSION = '2026.10.13-1013';
+const VERSION = '2026.10.13-1407';
 const CACHE = 'si-geweer-' + VERSION;
 const FILES = [
-  './', './index.html', './app.js', './logic.js', './store.js', './style.css', './manifest.webmanifest',
+  './', './index.html', './app.js', './logic.js', './store.js', './ble.js', './style.css', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/maskable-512.png', './icons/apple-touch-icon.png',
 ];
 

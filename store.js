@@ -225,6 +225,20 @@ export class Store {
     return { courseId: result.id, title: L.courseTitle(result), joined: !local, stats, teamNote };
   }
 
+  /**
+   * Moving to another app (Safari to Bluefy) or phone: become the phone that wrote this file, with its course.
+   * Only in an empty app, so no course here is left without its cursusleider.
+   */
+  adopt(msg) {
+    this.profile = { ...this.profile, deviceId: msg.fromId, name: msg.fromName };
+    write('profile', this.profile);
+    if (msg.standard) {
+      this.standard = msg.standard;
+      write('standard', msg.standard);
+    }
+    return this.receive(msg.course, msg.fromId, msg.fromName, msg.standard);
+  }
+
   /** The file this phone sends: its whole course, like the Android app. */
   syncMessage(c) {
     return {

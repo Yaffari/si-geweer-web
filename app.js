@@ -1,9 +1,10 @@
 // SI Geweer for iPhone: the Android app's screens as an offline web app (home-screen app on iOS).
 // One render function per screen; clicks are routed through data-act, typing through data-input.
 import * as L from './logic.js';
+import * as BL from './ble.js';
 import { Store } from './store.js';
 
-const VERSION = '2026.10.13-1013';
+const VERSION = '2026.10.13-1407';
 const S = new Store();
 const $app = document.getElementById('app');
 const $dlg = document.getElementById('dialog');
@@ -45,6 +46,7 @@ const PATHS = {
   settings: 'M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z',
   check: 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z',
   download: 'M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z',
+  bt: 'M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z',
   camera: 'M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4zM9 2L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2h-3.17L15 2H9zm3 15c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z',
 };
 const icon = (n, size = 24) => `<svg class="ic" width="${size}" height="${size}" viewBox="0 0 24 24" aria-hidden="true"><path d="${PATHS[n]}"/></svg>`;
@@ -97,7 +99,7 @@ function pbar(sum, cls = '') {
 }
 
 function installHint() {
-  if (!isIOS || standalone) return '';
+  if (!isIOS || standalone || BL.available()) return '';
   return info(
     "Tik in Safari op Deel (het vierkantje met de pijl omhoog) en kies 'Zet op beginscherm'. Open de app daarna altijd via dat icoon: " +
       'dan werkt hij zonder internet. Let op: Safari en de app op het beginscherm bewaren hun gegevens apart.',
@@ -226,6 +228,7 @@ const SCREENS = {
         <input id="welcome-name" data-input="nameText" value="${esc(s.nameText)}" placeholder="bijv. Sgt1 Jansen" maxlength="40" autocomplete="off" autocapitalize="words" enterkeyhint="done"></label>
       <p class="hint">Deze naam staat bij je beoordelingen.</p>
       <button class="btn primary wide" data-act="welcome-done">Verder</button>
+      <button class="text alt" data-act="adopt-pick">Al in gebruik in Safari of op een andere telefoon? Gegevens overzetten</button>
     </main>`;
   },
 
@@ -415,19 +418,24 @@ const SCREENS = {
         "4. Op Android tikken de instructeurs op het bestand en kiezen 'Openen met SI Geweer'."
       : "1. Tik op 'Bestand versturen' en stuur het naar de cursusleider (WhatsApp, mail of AirDrop).\n" +
         '2. Krijg je het totaalbestand van de cursusleider? Bewaar het in Bestanden en lees het hier in.';
+    const bt = BL.available();
     return topBar({ title: 'Synchroniseren', sub: c ? L.courseTitle(c) : null, back: true }) + `<main class="page">
-      <p class="lead">Op de iPhone gaat synchroniseren met een bestand: zo werkt het met iedere telefoon, ook met Android.</p>
-      ${c ? big({ act: 'share-file', title: 'Bestand versturen', sub: leader ? 'Alles wat op jouw telefoon staat, voor de instructeurs' : 'Jouw beoordelingen, voor de cursusleider', ic: 'share', primary: true }) : ''}
-      ${big({ act: 'import-files', title: 'Bestanden inlezen', sub: 'Kies één of meer ontvangen bestanden', ic: 'download', primary: !c })}
-      ${info(steps, 'Zo werkt het')}
-    </main>${filePicker()}`;
+      ${btSection(false)}
+      ${bt ? '<h3 class="h3">Met een bestand</h3>' : ''}
+      <p class="${bt ? 'hint' : 'lead'}">${bt ? 'Voor iPhones onderling (AirDrop), of als Bluetooth niet lukt.' : 'Hier synchroniseer je met een bestand: zo werkt het met iedere telefoon, ook met Android.'}</p>
+      ${c ? big({ act: 'share-file', title: 'Bestand versturen', sub: leader ? 'Alles wat op jouw telefoon staat, voor de instructeurs' : 'Jouw beoordelingen, voor de cursusleider', ic: 'share', primary: !bt }) : ''}
+      ${big({ act: 'import-files', title: 'Bestanden inlezen', sub: 'Kies één of meer ontvangen bestanden', ic: 'download', primary: !c && !bt })}
+      ${info(steps, 'Zo werkt het met een bestand')}
+    </main>`;
   },
 
   join() {
     return topBar({ title: 'Deelnemen aan een cursus', back: true }) + `<main class="page">
+      ${btSection(true)}
+      ${BL.available() ? '<h3 class="h3">Met een bestand</h3>' : ''}
       <p class="lead">Vraag de cursusleider om het cursusbestand, via WhatsApp, mail of AirDrop. Bewaar het in Bestanden en kies het hier: dan heb je de cursus en de namen.</p>
-      ${big({ act: 'import-files', title: 'Bestand kiezen', sub: 'Het bestand van de cursusleider', ic: 'download', primary: true })}
-    </main>${filePicker()}`;
+      ${big({ act: 'import-files', title: 'Bestand kiezen', sub: 'Het bestand van de cursusleider', ic: 'download', primary: !BL.available() })}
+    </main>`;
   },
 
   courses() {
@@ -442,7 +450,7 @@ const SCREENS = {
     }).join('');
     return topBar({ title: 'Cursussen', sub: 'Op deze telefoon', back: true }) + `<main class="page">${cards}
       ${big({ act: 'go', data: { to: 'newCourse' }, title: 'Nieuwe cursus aanmaken', sub: 'Je wordt de cursusleider', ic: 'plus' })}
-      ${big({ act: 'go', data: { to: 'join' }, title: 'Deelnemen aan een cursus', sub: 'Lees het cursusbestand van de cursusleider in', ic: 'download' })}</main>`;
+      ${big({ act: 'go', data: { to: 'join' }, title: 'Deelnemen aan een cursus', sub: BL.available() ? 'Via Bluetooth of met het cursusbestand' : 'Lees het cursusbestand van de cursusleider in', ic: 'download' })}</main>`;
   },
 
   settings(s) {
@@ -453,7 +461,8 @@ const SCREENS = {
       <p class="hint">Staat bij nieuwe beoordelingen en is zichtbaar voor de cursusleider.</p>
       <button class="btn primary" data-act="save-name">Opslaan</button>
       ${big({ act: 'go', data: { to: 'myRoster' }, title: 'Mijn standaardrooster', sub: off.length ? `Niet op ${off.map(L.nl.weekdayAt).join(', ')}` : 'Elke werkdag beschikbaar', ic: 'cal' })}
-      ${info('De app gebruikt geen internet en bewaart alles op deze telefoon. Synchroniseren gaat met een bestand dat je zelf verstuurt.', 'Alles blijft op deze telefoon')}
+      ${big({ act: 'adopt-pick', title: 'Gegevens overzetten', sub: 'Van Safari naar Bluefy, of van een andere telefoon', ic: 'download' })}
+      ${info('De app gebruikt geen internet en bewaart alles op deze telefoon. Synchroniseren gaat via Bluetooth of met een bestand dat je zelf verstuurt.', 'Alles blijft op deze telefoon')}
       <p class="muted small">Versie ${VERSION}</p>
     </main>`;
   },
@@ -478,8 +487,9 @@ function startScreen() {
     <div class="markwrap">${mark(56)}</div>
     <h2 class="h2">Nog geen cursus op deze telefoon</h2>
     ${big({ act: 'go', data: { to: 'newCourse' }, title: 'Nieuwe cursus aanmaken', sub: 'Je wordt de cursusleider', ic: 'plus', primary: true })}
-    ${big({ act: 'go', data: { to: 'join' }, title: 'Deelnemen aan een cursus', sub: 'Lees het cursusbestand van de cursusleider in', ic: 'download' })}
+    ${big({ act: 'go', data: { to: 'join' }, title: 'Deelnemen aan een cursus', sub: BL.available() ? 'Via Bluetooth of met het cursusbestand' : 'Lees het cursusbestand van de cursusleider in', ic: 'download' })}
     ${big({ act: 'go', data: { to: 'myRoster' }, title: 'Mijn standaardrooster', sub: 'Op welke dagen ben je normaal beschikbaar?', ic: 'cal' })}
+    ${big({ act: 'adopt-pick', title: 'Gegevens overzetten', sub: 'Van Safari naar Bluefy, of van een andere telefoon', ic: 'download' })}
   </main>`;
 }
 
@@ -650,12 +660,14 @@ function teamTab(c, leader) {
     ${team.map((m) => person(m.name, m.id === me, false,
       `${L.nl.count(counts.get(m.id) ?? 0, 'beoordeling', 'beoordelingen')} · ${m.lastSync > 0 ? `gesynchroniseerd ${L.nl.moment(m.lastSync)}` : 'nog niet gesynchroniseerd'}`,
       leader ? m.id : null)).join('')}
-    ${info("Instructeurs komen in het team zodra ze een bestand naar de cursusleider sturen of de cursus ophalen ('Deelnemen aan een cursus').")}`;
+    ${info("Instructeurs komen in het team zodra ze met de cursusleider synchroniseren of de cursus ophalen ('Deelnemen aan een cursus').")}`;
 }
 
-function filePicker() {
-  return '<input type="file" id="filepick" data-input="files" accept=".txt,.json,text/plain,application/json" multiple hidden>';
-}
+// The file inputs live outside the screens: the page redraws when it comes back from the file picker
+// (visibilitychange), and a redrawn input would lose the chosen file.
+document.body.insertAdjacentHTML('beforeend',
+  '<input type="file" id="filepick" data-input="files" accept=".txt,.json,text/plain,application/json" multiple hidden>' +
+  '<input type="file" id="adoptpick" data-input="adoptFile" accept=".txt,.json,text/plain,application/json" hidden>');
 
 // ------------------------------------------------------------------ beoordelen
 
@@ -759,6 +771,226 @@ async function importFiles(files) {
     buttons: [{ label: 'OK', act: joined ? 'dlg-home' : 'dlg-close' }],
   });
   render();
+}
+
+/** Moving to this app: take over who you are and your course from a file you sent yourself. */
+async function adoptFile(f) {
+  let msg;
+  try {
+    msg = L.parseSyncFile(await f.text());
+  } catch (e) {
+    return toast(`${f.name}: ${e.message}`);
+  }
+  if (S.courses.size) {
+    return openDialog({
+      title: 'Alleen in een lege app',
+      body: '<p>Overzetten kan alleen als hier nog geen cursus staat. Verwijder die eerst via Cursussen, of lees het bestand gewoon in bij Synchroniseren.</p>',
+      buttons: [{ label: 'OK', act: 'dlg-close' }],
+    });
+  }
+  const c = msg.course;
+  const role = c.leaderId === msg.fromId ? `cursusleider van ${L.courseTitle(c)}` : `instructeur bij ${L.courseTitle(c)}`;
+  confirm({
+    title: `Overzetten als ${msg.fromName}?`,
+    text: `Deze app wordt dan dezelfde als de app die dit bestand verstuurde: ${msg.fromName}, ${role}, met de cursus, de beoordelingen en het standaardrooster. ` +
+      'Doe dit alleen met een bestand dat je zelf hebt verstuurd, en gebruik daarna alleen deze app.',
+    ok: 'Overzetten',
+    onOk: () => {
+      S.adopt(msg);
+      home();
+      toast(`Overgezet: ${L.courseTitle(c)}`);
+    },
+  });
+}
+
+// ------------------------------------------------------------------ Bluetooth (Android phones)
+
+// One round of phones; stays while the app is open, so you can look at other screens in between.
+const BT = { peers: [], finished: false };
+
+/** The Bluetooth part of Synchroniseren / Deelnemen; in Safari, the way to get it (Bluefy). */
+function btSection(join) {
+  if (!BL.available()) {
+    if (!isIOS) return '';
+    return info(
+      'Safari kan geen Bluetooth gebruiken, de gratis app Bluefy (App Store) wel. Open daarin yaffari.github.io/si-geweer-web: dan synchroniseer je via Bluetooth met de Android-telefoons, zonder internet.\n' +
+        "Gebruik je SI Geweer al in Safari? Tik hier op 'Bestand versturen', kies 'Bewaar in Bestanden', en kies in Bluefy bij Instellingen 'Gegevens overzetten'.",
+      'Liever via Bluetooth?',
+    );
+  }
+  const hint = join
+    ? "Gebruikt de cursusleider Android? Laat die Synchroniseren openen en dan 'Synchroniseren met iPhone'. Tik hieronder en kies die telefoon."
+    : "Laat de instructeurs met Android Synchroniseren openen en dan 'Synchroniseren met iPhone'. Tik hieronder en kies hun telefoon, één voor één.";
+  return `<h3 class="h3">Via Bluetooth, met Android</h3><p class="hint">${esc(hint)}</p>
+    ${big({ act: 'bt-connect', title: 'Verbind met een Android-telefoon', sub: 'Een lijst van telefoons in de buurt verschijnt', ic: 'bt', primary: true })}
+    <div id="bt-peers" class="btpeers">${btPeers()}</div>`;
+}
+
+function btPeers() {
+  const rows = BT.peers.map((p, i) => {
+    const mark = p.state === 'busy' ? '<span class="btdot busy"></span>'
+      : p.state === 'error' ? '<span class="btdot error">!</span>'
+      : `<span class="btdot ${p.state}">${icon('check', 18)}</span>`;
+    const again = p.state === 'error' ? `<button class="text" data-act="bt-retry" data-i="${i}">Opnieuw</button>` : '';
+    return `<div class="person peer">${mark}<span class="rowtext"><span class="rowtitle">${esc(p.name)}</span><span class="rowsub">${esc(p.status)}${p.away && p.state === 'ok' ? ' · niet meer verbonden' : ''}</span></span>${again}</div>`;
+  }).join('');
+  if (BT.finished) {
+    const ok = BT.peers.filter((p) => p.state === 'final').length;
+    return rows + info(`${L.nl.count(ok, 'telefoon heeft', 'telefoons hebben')} nu dezelfde beoordelingen als jij.`, 'Klaar');
+  }
+  const ready = BT.peers.some((p) => p.courseId && p.state === 'ok') && !BT.peers.some((p) => p.state === 'busy');
+  return rows + (ready ? `<button class="btn primary wide" data-act="bt-finish">${icon('check')} Klaar: iedereen bijwerken</button>
+    <p class="hint">Tik hierop als iedereen geweest is: wie hierboven staat, krijgt dan de complete set.</p>` : '');
+}
+
+function refreshBt() {
+  const el = document.getElementById('bt-peers');
+  if (el) el.innerHTML = btPeers();
+}
+
+async function btConnect() {
+  if (BT.finished) {
+    BT.peers = [];
+    BT.finished = false;
+    refreshBt();
+  }
+  let device;
+  try {
+    device = await BL.pickPhone();
+  } catch (e) {
+    return toast(BL.describe(e));
+  }
+  if (!device) return;
+  let p = BT.peers.find((x) => x.device.id === device.id);
+  if (!p) {
+    p = { device, link: new BL.Link(device), name: device.name || 'Android-telefoon', status: '', state: 'busy', courseId: null, away: false, join: false };
+    device.addEventListener('gattserverdisconnected', () => { p.away = true; refreshBt(); });
+    BT.peers.push(p);
+  }
+  p.join = screen().name === 'join'; // from Deelnemen: take that phone's course, never hand it ours
+  if (p.state !== 'busy' || !p.status) btSync(p);
+}
+
+// a message for the user: trying again does not help
+const stop = (message) => Object.assign(new Error(message), { final: true });
+
+/** Runs [fn] for one phone; a broken or stale connection gets one more try from scratch. */
+async function btTry(p, fn) {
+  try {
+    return await fn();
+  } catch (e) {
+    if (e.final) throw e;
+    p.link.disconnect();
+    return fn();
+  }
+}
+
+/** One phone: fetch what it has, merge, send the result back. A phone without the course gets it. */
+async function btSync(p) {
+  const step = (status) => { p.state = 'busy'; p.status = status; refreshBt(); };
+  const before = cur()?.id;
+  try {
+    await btTry(p, () => btExchange(p, step));
+  } catch (e) {
+    p.state = 'error';
+    p.status = BL.describe(e);
+  }
+  if (cur()?.id !== before) render(); // joined a course: the screen's title changes
+  else refreshBt();
+}
+
+/** Connect and check, then fetch + merge + send back; a phone without this course is sent it first. */
+async function btExchange(p, step) {
+  step('Verbinden…');
+  await p.link.connect();
+  p.away = false;
+  const info = await p.link.readInfo();
+  if (info.app !== L.APP_TAG) throw stop('Dit is geen SI Geweer-telefoon.');
+  if (info.v !== BL.VERSION) throw stop('Deze telefoon heeft een andere versie van SI Geweer. Werk beide apps bij.');
+  p.name = info.name || p.name;
+  // Android changes its Bluetooth address now and then: the same phone can show up as a new one
+  const twin = BT.peers.find((x) => x !== p && x.phoneId === info.id);
+  if (twin) {
+    BT.peers.splice(BT.peers.indexOf(twin), 1);
+    twin.link.disconnect();
+  }
+  p.phoneId = info.id;
+  const mine = cur();
+  let got = null;
+  let res;
+  if (p.join && !info.course) throw stop('Op die telefoon staat nog geen cursus. Kies de telefoon van de cursusleider.');
+  if (info.course && (p.join || S.courses.has(info.course) || !(mine && S.isLeader(mine)))) {
+    step('Ophalen…');
+    got = await btPull(p);
+    p.courseId = info.course;
+    step('Versturen…');
+    res = await btPush(p, 'state');
+  } else if (mine) {
+    // that phone has no course yet (or an old one): it joins this one
+    p.courseId = mine.id;
+    step('Versturen…');
+    res = await btPush(p, 'state');
+    step('Ophalen…');
+    got = await btPull(p);
+  } else {
+    throw stop('Er staat op geen van beide telefoons een cursus.');
+  }
+  p.state = 'ok';
+  p.status = btSummary(p, got, res);
+}
+
+async function btPull(p) {
+  const msg = L.parseSyncFile(await p.link.pull());
+  const r = S.receive(msg.course, msg.fromId, msg.fromName, msg.standard);
+  return { r, from: msg.fromName, own: msg.course.ratings.filter((x) => x.authorId === msg.fromId && !x.deleted).length };
+}
+
+/** Sends the course; returns what that phone says it took in. */
+async function btPush(p, type) {
+  const c = S.courses.get(p.courseId);
+  const id = await p.link.push({ ...S.syncMessage(c), type });
+  return (await p.link.waitTaken(id)).res;
+}
+
+function btSummary(p, got, res) {
+  const parts = [];
+  if (got?.r.joined) parts.push(`je doet nu mee met ${got.r.title}`);
+  else if (got) {
+    const news = got.r.stats.newRatings + got.r.stats.updatedRatings;
+    parts.push(`${L.nl.count(got.own, 'beoordeling', 'beoordelingen')} ontvangen${news ? `, ${news} nieuw` : ''}`);
+    if (got.r.teamNote) parts.push(got.r.teamNote);
+  }
+  if (res) parts.push(`${p.name} ${res}`);
+  return parts.join(' · ');
+}
+
+/** Klaar: every phone of this round gets the final set, then the connections close. */
+async function btFinish() {
+  const list = BT.peers.filter((p) => p.courseId && p.state === 'ok');
+  for (const p of list) { p.state = 'busy'; p.status = 'Wacht op de beurt…'; }
+  refreshBt();
+  for (const p of list) {
+    p.status = 'Bijwerken…';
+    refreshBt();
+    try {
+      await btTry(p, async () => {
+        await p.link.connect();
+        await p.link.readInfo();
+        await btPush(p, 'done');
+        await p.link.done();
+      });
+      p.state = 'final';
+      p.status = 'heeft nu alles';
+    } catch (e) {
+      p.state = 'error';
+      p.status = `Niet bijgewerkt: ${BL.describe(e)}`;
+    }
+    p.link.disconnect();
+    refreshBt();
+  }
+  for (const id of new Set(list.map((p) => p.courseId))) S.markSynced(id);
+  BT.finished = true;
+  refreshBt();
 }
 
 // ------------------------------------------------------------------ events
@@ -908,12 +1140,18 @@ const ACT = {
     home();
     openDialog({
       title: 'Lijst klaar',
-      body: `<p>De instructeurs krijgen de ${L.nl.count(n, 'naam', 'namen')} als ze jouw cursusbestand inlezen. Stuur het nu via Synchroniseren, bijvoorbeeld in de WhatsApp-groep.</p>`,
-      buttons: [{ label: 'Later', act: 'dlg-close' }, { label: 'Nu versturen', act: 'menu-go', data: { to: 'sync' } }],
+      body: BL.available()
+        ? `<p>De instructeurs krijgen de ${L.nl.count(n, 'naam', 'namen')} als ze met je synchroniseren: via Bluetooth (Android) of met je cursusbestand.</p>`
+        : `<p>De instructeurs krijgen de ${L.nl.count(n, 'naam', 'namen')} als ze jouw cursusbestand inlezen. Stuur het nu via Synchroniseren, bijvoorbeeld in de WhatsApp-groep.</p>`,
+      buttons: [{ label: 'Later', act: 'dlg-close' }, { label: BL.available() ? 'Nu synchroniseren' : 'Nu versturen', act: 'menu-go', data: { to: 'sync' } }],
     });
   },
 
   'share-file': () => shareFile(),
+  'adopt-pick': () => document.getElementById('adoptpick')?.click(),
+  'bt-connect': () => btConnect(),
+  'bt-retry': (d) => { const p = BT.peers[Number(d.i)]; if (p) btSync(p); },
+  'bt-finish': () => btFinish(),
   'import-files': () => document.getElementById('filepick')?.click(),
 
   'set-active': (d) => { S.setActive(d.id); home(); },
@@ -1006,6 +1244,11 @@ const INPUT = {
     const files = [...el.files];
     el.value = '';
     if (files.length) importFiles(files);
+  },
+  adoptFile: (_, el) => {
+    const f = el.files[0];
+    el.value = '';
+    if (f) adoptFile(f);
   },
 };
 
